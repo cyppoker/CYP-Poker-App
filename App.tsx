@@ -8,7 +8,7 @@ import {
 const CLUB = {
   id: 'cyp',
   name: 'CYP Poker',
-  api: 'https://cyppoker.co.uk',
+  api: 'https://development.cyp-poker.pages.dev',
   colours: { bg: '#061426', panel: '#0d2745', raised: '#12365d', gold: '#efc250', blue: '#2788e7', text: '#fff', muted: '#a9bfd6' },
 } as const;
 
@@ -33,15 +33,16 @@ async function get<T>(path: string): Promise<T> {
 
 async function loadData(): Promise<Data> {
   const [homepage, history, leagueData, playerData] = await Promise.all([
-    get<Data['homepage']>('/api/homepage-settings'),
-    get<{ tournaments?: Tournament[] }>('/api/tournament-history'),
-    get<{ leagues?: Record<string, League> }>('/api/leagues'),
-    get<{ players?: string[] }>('/api/players'),
+    get<Data['homepage']>('/api/public/homepage'),
+    get<{ tournaments?: Tournament[] }>('/api/public/tournaments'),
+    get<{ leagues?: Record<string, League> }>('/api/public/leagues'),
+    get<{ players?: string[] }>('/api/public/players'),
   ]);
   return { homepage, tournaments: history.tournaments ?? [], leagues: leagueData.leagues ?? {}, players: playerData.players ?? [] };
 }
 
 const money = (value?: number) => `£${Number(value ?? 0).toLocaleString('en-GB')}`;
+const cleanText = (value?: string) => String(value ?? '').replace(/Â£/g, '£');
 function date(value?: string) {
   if (!value) return 'Date to be confirmed';
   const parsed = new Date(value + 'T12:00:00');
@@ -71,7 +72,7 @@ function Home({ data, go }: { data: Data; go: (tab: Tab) => void }) {
     <Heading title="Next tournament" action="VIEW ALL" />
     <Pressable onPress={() => go('Games')}><Card gold>
       <Text style={s.pill}>UPCOMING</Text>
-      <Text style={s.feature}>{next?.details || 'Tournament to be announced'}</Text>
+      <Text style={s.feature}>{cleanText(next?.details) || 'Tournament to be announced'}</Text>
       <Text style={s.gold}>{date(next?.date)}{next?.time ? `  ·  ${next.time}` : ''}</Text>
       <Text style={s.hint}>Tap to view tournament information →</Text>
     </Card></Pressable>
@@ -97,7 +98,7 @@ function Home({ data, go }: { data: Data; go: (tab: Tab) => void }) {
 function Games({ data }: { data: Data }) {
   const next = data.homepage.nextTournament;
   return <><Title title="Tournaments" subtitle="What’s coming up and what’s been played" />
-    <Heading title="Upcoming" /><Card gold><Text style={s.feature}>{next?.details || 'Tournament to be announced'}</Text>
+    <Heading title="Upcoming" /><Card gold><Text style={s.feature}>{cleanText(next?.details) || 'Tournament to be announced'}</Text>
       <Text style={s.gold}>{date(next?.date)}{next?.time ? `  ·  ${next.time}` : ''}</Text></Card>
     <Heading title="Recent tournaments" />
     {data.tournaments.slice(0, 12).map((t, i) => <Card key={t.code || t.id || i}><View style={s.row}>
