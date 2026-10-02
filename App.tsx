@@ -72,12 +72,12 @@ function Home({ data, go }: { data: Data; go: (tab: Tab) => void }) {
       <Text style={s.subtitle}>Tournaments · Leagues · Player Stats</Text>
     </View>
     <Heading title="Next tournament" action="VIEW ALL" />
-    <Pressable onPress={() => go('Games')}><Card gold>
+    {next?.status !== 'tbc' && (next?.date || next?.details) ? <Pressable onPress={() => go('Games')}><Card gold>
       <Text style={s.pill}>UPCOMING</Text>
-      <Text style={s.feature}>{cleanText(next?.details) || 'Tournament to be announced'}</Text>
+      <Text style={s.feature}>{cleanText(next?.details) || 'Tournament'}</Text>
       <Text style={s.gold}>{date(next?.date)}{next?.time ? `  ·  ${next.time}` : ''}</Text>
       <Text style={s.hint}>Tap to view tournament information →</Text>
-    </Card></Pressable>
+    </Card></Pressable> : <Card><Text style={s.muted}>No tournament is currently scheduled.</Text></Card>}
     {nextLeagues.length > 0 && <>
       <Heading title="Upcoming league games" action="LEAGUES" />
       <Card>{nextLeagues.map(([key, game], i) => <Pressable key={key} onPress={() => go('Leagues')} style={[s.row, s.listRow, i > 0 && s.divider]}>
@@ -128,8 +128,8 @@ function Games({ data }: { data: Data }) {
     </>;
   }
   return <><Title title="Tournaments" subtitle="What’s coming up and what’s been played" />
-    <Heading title="Upcoming" /><Card gold><Text style={s.feature}>{cleanText(next?.details) || 'Tournament to be announced'}</Text>
-      <Text style={s.gold}>{date(next?.date)}{next?.time ? `  ·  ${next.time}` : ''}</Text></Card>
+    <Heading title="Upcoming" />{next?.status !== 'tbc' && (next?.date || next?.details) ? <Card gold><Text style={s.feature}>{cleanText(next?.details) || 'Tournament'}</Text>
+      <Text style={s.gold}>{date(next?.date)}{next?.time ? `  ·  ${next.time}` : ''}</Text></Card> : <Card><Text style={s.muted}>No tournament is currently scheduled.</Text></Card>}
     {nextLeagues.length > 0 && <>
       <Heading title="Upcoming league games" />
       {nextLeagues.map(([key, game]) => <Card key={key}>
@@ -214,12 +214,19 @@ function Players({ data }: { data: Data }) {
 }
 
 function Results({ data }: { data: Data }) {
-  return <><Title title="Winners & Results" subtitle="The latest from the tables" />
-    {data.tournaments.map((t, i) => { const winner = t.players?.find(p => p.finish === 1); return <Card key={t.code || t.id || i}>
+  const cutoff = new Date(); cutoff.setMonth(cutoff.getMonth() - 2);
+  const recent = data.tournaments.filter(t => {
+    if (!t.date) return true;
+    const parsed = new Date(t.date + 'T12:00:00');
+    return Number.isNaN(parsed.getTime()) || parsed >= cutoff;
+  });
+  return <><Title title="Winners & Results" subtitle="Results from the last two months" />
+    {recent.length ? recent.map((t, i) => { const winner = t.players?.find(p => p.finish === 1); return <Card key={t.code || t.id || i}>
       <View style={s.row}><View style={s.resultIcon}><Text style={s.resultIconText}>♠</Text></View><View style={s.flex}>
         <Text style={s.rowTitle}>{t.winner || winner?.name || 'Winner'}</Text><Text style={s.muted}>{t.typeLabel || t.name}</Text>
-        <Text style={s.faint}>{date(t.date)}</Text></View><Text style={s.amount}>{money(winner?.winnings)}</Text></View>
-    </Card>; })}</>;
+        <Text style={s.faint}>{date(t.date)}</Text></View><Text style={s.amount}>{Number(winner?.winnings ?? 0) > 0 ? money(winner?.winnings) : ''}</Text></View>
+    </Card>; }) : <Card><Text style={s.muted}>No tournament results are available from the last two months.</Text></Card>}
+  </>;
 }
 
 const tabs: { key: Tab; icon: string }[] = [
@@ -243,7 +250,7 @@ export default function App() {
   const content = tab === 'Home' ? <Home data={data} go={setTab} /> : tab === 'Games' ? <Games data={data} /> :
     tab === 'Leagues' ? <Leagues data={data} /> : tab === 'Players' ? <Players data={data} /> : <Results data={data} />;
   return <SafeAreaView style={s.safe}><StatusBar style="light" />
-    <View style={s.appBar}><Text style={s.appLogo}>♠</Text><Text style={s.appTitle}>{CLUB.name}</Text><View style={s.online} /></View>
+    <View style={s.appBar}><Text style={s.appLogo}>♠</Text><Text style={s.appTitle}>{CLUB.name}</Text><View style={[s.online, error && s.offline]} /></View>
     {loading ? <View style={s.loader}><ActivityIndicator color={C.gold} size="large" /><Text style={s.muted}>Loading CYP Poker…</Text></View> :
       <ScrollView key={tab} style={s.flex} contentContainerStyle={s.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => refresh(true)} tintColor={C.gold} />}>
@@ -260,7 +267,7 @@ const s = StyleSheet.create({
   safe: { flex: 1, backgroundColor: C.bg }, flex: { flex: 1 },
   appBar: { height: 54, paddingHorizontal: 18, flexDirection: 'row', alignItems: 'center', backgroundColor: '#071b31', borderBottomWidth: 1, borderBottomColor: '#16324d' },
   appLogo: { color: C.gold, fontSize: 26, marginRight: 9 }, appTitle: { flex: 1, color: C.text, fontSize: 18, fontWeight: '800' },
-  online: { width: 8, height: 8, borderRadius: 8, backgroundColor: '#37c979' }, scroll: { paddingHorizontal: 16, paddingBottom: 28 },
+  online: { width: 8, height: 8, borderRadius: 8, backgroundColor: '#37c979' }, offline: { backgroundColor: '#d85b67' }, scroll: { paddingHorizontal: 16, paddingBottom: 28 },
   hero: { alignItems: 'center', paddingTop: 28, paddingBottom: 22 }, brandImage: { width: 315, maxWidth: '94%', height: 82, marginBottom: 12 },
   eyebrow: { color: C.gold, fontWeight: '900', fontSize: 11, letterSpacing: 3 },
   heroTitle: { color: C.text, fontWeight: '900', fontSize: 35, letterSpacing: 1.2 }, subtitle: { color: C.muted, fontSize: 13, marginTop: 4 },
