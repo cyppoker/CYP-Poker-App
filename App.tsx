@@ -13,18 +13,27 @@ const CLUB = {
 } as const;
 
 type Tab = 'Home' | 'Games' | 'Leagues' | 'Players' | 'Results';
-type TournamentPlayer = { name: string; finish?: number; winnings?: number };
-type Tournament = { id?: number; code?: string; name?: string; typeLabel?: string; date?: string; winner?: string; entries?: number; prizePool?: number; buyIn?: number; startingStack?: number; paidPlaces?: number; players?: TournamentPlayer[] };
-type LeaguePlayer = { name: string; played?: number; wins?: number; points?: number };
-type League = { name?: string; gamesPlayed?: number; totalGames?: number; players?: LeaguePlayer[] };
+type TournamentPlayer = { name: string; finish?: number; winnings?: number; spent?: number; buyIn?: number; rebuys?: number; bountyWon?: number; finalBounty?: number };
+type Tournament = { id?: number; code?: string; name?: string; typeLabel?: string; tournamentType?: string; date?: string; winner?: string; entries?: number; prizePool?: number; buyIn?: number; startingStack?: number; paidPlaces?: number; format?: string; theme?: string; charityRaised?: number; players?: TournamentPlayer[]; finishingOrder?: TournamentPlayer[] };
+type LeaguePlayer = { name: string; played?: number; gamesPlayed?: number; wins?: number; bounties?: number; points?: number; averagePoints?: number; averagePosition?: number; position?: number };
+type League = { name?: string; seasonName?: string; gamesPlayed?: number; totalGames?: number; gamesRemaining?: number; gamesPerPlayer?: number; playersPerGame?: number; players?: LeaguePlayer[]; table?: LeaguePlayer[] };
 type UpcomingGame = { date?: string; time?: string; details?: string; status?: string };
+type LeagueGameResult = { player?: string; name?: string; finish?: number; points?: number; bounties?: number; eliminatedBy?: string };
+type LeagueGame = { id?: string|number; season?: string; division?: string; divisionName?: string; gameNumber?: number; date?: string; entrants?: number; winner?: string; results?: LeagueGameResult[] };
+type TournamentHistoryRow = { id?: number|string; code?: string; date?: string; tournamentName?: string; name?: string; type?: string; format?: string; finish?: number; spent?: number; winnings?: number; bountyWinnings?: number };
+type LeagueSeason = { division?: string; divisionName?: string; season?: string; seasonName?: string; status?: string; games?: number; wins?: number; bounties?: number; points?: number; averagePoints?: number; averagePosition?: number; finalPosition?: number };
+type PlayerProfile = { name: string; tournament?: { games?: number; wins?: number; cashes?: number; eliminations?: number; winnings?: number; totalSpent?: number; averageFinish?: number; history?: TournamentHistoryRow[] }; league?: { totals?: { games?: number; wins?: number; bounties?: number; points?: number; averagePoints?: number; averagePosition?: number }; current?: { division?: string; season?: string; startDate?: string; endDate?: string }; seasons?: LeagueSeason[]; gameHistory?: LeagueGame[] } };
+type LiveGame = { code?: string; name?: string; typeLabel?: string; format?: string; date?: string; currentLevel?: any; nextLevel?: any; clock?: { secondsRemaining?: number; running?: boolean; paused?: boolean; isBreak?: boolean }; stats?: { entries?: number; playersRemaining?: number; startingStack?: number; chipsInPlay?: number; averageStack?: number; prizePool?: number; paidPlaces?: number } };
 type Data = {
-  homepage: { nextTournament?: UpcomingGame; nextLeagues?: Record<string, UpcomingGame> };
+  homepage: { nextTournament?: UpcomingGame; nextLeagues?: Record<string, UpcomingGame>; latestWinners?: any[]; latestLeagueWinners?: any[]; leagueLeaders?: any[]; liveGames?: LiveGame[] };
   tournaments: Tournament[];
   leagues: Record<string, League>;
   players: string[];
+  profiles: PlayerProfile[];
+  leagueGames: LeagueGame[];
+  liveGames: LiveGame[];
 };
-const empty: Data = { homepage: {}, tournaments: [], leagues: {}, players: [] };
+const empty: Data = { homepage: {}, tournaments: [], leagues: {}, players: [], profiles: [], leagueGames: [], liveGames: [] };
 
 async function get<T>(path: string): Promise<T> {
   const response = await fetch(CLUB.api + path);
@@ -33,13 +42,19 @@ async function get<T>(path: string): Promise<T> {
 }
 
 async function loadData(): Promise<Data> {
-  const [homepage, history, leagueData, playerData] = await Promise.all([
+  const [homepage, history, leagueData, playerData, profileData, gameData, liveData] = await Promise.all([
     get<Data['homepage']>('/api/public/homepage'),
     get<{ tournaments?: Tournament[] }>('/api/public/tournaments'),
     get<{ leagues?: Record<string, League> }>('/api/public/leagues'),
     get<{ players?: string[] }>('/api/public/players'),
+    get<{ players?: PlayerProfile[]; profiles?: PlayerProfile[] }>('/api/public/player-profiles').catch(() => ({ players: [], profiles: [] })),
+    get<{ games?: LeagueGame[] }>('/api/public/league-games').catch(() => ({ games: [] })),
+    get<{ games?: LiveGame[] }>('/api/public/live').catch(() => ({ games: [] })),
   ]);
-  return { homepage, tournaments: history.tournaments ?? [], leagues: leagueData.leagues ?? {}, players: playerData.players ?? [] };
+  return {
+    homepage, tournaments: history.tournaments ?? [], leagues: leagueData.leagues ?? {}, players: playerData.players ?? [],
+    profiles: profileData.players ?? profileData.profiles ?? [], leagueGames: gameData.games ?? [], liveGames: liveData.games ?? []
+  };
 }
 
 const money = (value?: number) => `£${Number(value ?? 0).toLocaleString('en-GB')}`;
@@ -71,6 +86,7 @@ function Home({ data, go }: { data: Data; go: (tab: Tab) => void }) {
       <Text style={s.eyebrow}>BRIDLINGTON CYP</Text><Text style={s.heroTitle}>CYP POKER</Text>
       <Text style={s.subtitle}>Tournaments · Leagues · Player Stats</Text>
     </View>
+    {data.liveGames.length > 0 && <><Heading title="Live now" /><Card gold>{data.liveGames.map((g,i)=><View key={g.code||String(i)} style={i>0?s.divider:undefined}><Text style={s.pill}>LIVE</Text><Text style={s.rowTitle}>{g.typeLabel||g.name||'Tournament'}</Text><Text style={s.muted}>{g.stats?.playersRemaining ?? 0} remaining · Avg stack {Number(g.stats?.averageStack??0).toLocaleString('en-GB')}</Text><Text style={s.gold}>{g.clock?.isBreak?'Break':`Level ${Number(g.levelIndex??0)+1}`}</Text></View>)}</Card></>}
     <Heading title="Next tournament" action="VIEW ALL" />
     {next?.status !== 'tbc' && (next?.date || next?.details) ? <Pressable onPress={() => go('Games')}><Card gold>
       <Text style={s.pill}>UPCOMING</Text>
@@ -147,69 +163,66 @@ function Games({ data }: { data: Data }) {
 }
 
 function Leagues({ data }: { data: Data }) {
+  const [showHistory, setShowHistory] = useState(false);
+  if (showHistory) return <><Pressable onPress={() => setShowHistory(false)}><Text style={s.back}>‹ Back to league tables</Text></Pressable>
+    <Title title="Completed League Games" subtitle="League game history" />
+    {data.leagueGames.length ? data.leagueGames.map((g, i) => <Card key={String(g.id ?? i)}>
+      <Text style={s.rowTitle}>{g.divisionName || g.division || 'League'}{g.gameNumber ? ` · Game ${g.gameNumber}` : ''}</Text>
+      <Text style={s.faint}>{date(g.date)} · {g.entrants ?? g.results?.length ?? 0} players</Text>
+      {(g.results ?? []).sort((a,b)=>Number(a.finish??999)-Number(b.finish??999)).map((r,j)=><View key={`${r.player||r.name}-${j}`} style={[s.tableRow,j>0&&s.divider]}>
+        <View style={[s.rank,r.finish===1&&s.rankGold]}><Text style={s.rankText}>{r.finish ?? j+1}</Text></View>
+        <Text style={[s.flex,s.white]} numberOfLines={1}>{r.player || r.name}</Text>
+        <Text style={s.num}>{r.bounties ?? 0} B</Text><Text style={s.pts}>{r.points ?? 0}</Text>
+      </View>)}
+    </Card>) : <Card><Text style={s.muted}>No completed league games are available yet.</Text></Card>}
+  </>;
   return <><Title title="Leagues" subtitle="Current CYP standings" />
-    {Object.entries(data.leagues).filter(([, l]) => l.players?.length).map(([key, league]) => {
-      const players = [...(league.players ?? [])].sort((a, b) => Number(b.points) - Number(a.points));
+    {Object.entries(data.leagues).filter(([, l]) => (l.table?.length || l.players?.length)).map(([key, league]) => {
+      const players = [...(league.table ?? league.players ?? [])].sort((a,b)=>Number(a.position??999)-Number(b.position??999) || Number(b.points)-Number(a.points));
       return <View key={key}><Heading title={league.name || key} action={`${league.gamesPlayed ?? 0}/${league.totalGames ?? 0} GAMES`} />
-        <Card><View style={s.tableHead}><Text style={s.pos}>POS</Text><Text style={[s.flex, s.faint]}>PLAYER</Text>
-          <Text style={s.num}>P</Text><Text style={s.num}>W</Text><Text style={s.pts}>PTS</Text></View>
-          {players.map((p, i) => <View key={p.name} style={[s.tableRow, i > 0 && s.divider]}>
-            <View style={[s.rank, i === 0 && s.rankGold]}><Text style={s.rankText}>{i + 1}</Text></View>
-            <Text numberOfLines={1} style={[s.flex, s.white]}>{p.name}</Text><Text style={s.num}>{p.played ?? 0}</Text>
-            <Text style={s.num}>{p.wins ?? 0}</Text><Text style={s.pts}>{p.points ?? 0}</Text>
-          </View>)}</Card>
+        <Card><Text style={s.muted}>{league.seasonName || ''}{league.gamesRemaining != null ? ` · ${league.gamesRemaining} games remaining` : ''}{league.gamesPerPlayer != null ? ` · ${league.gamesPerPlayer} each` : ''}</Text>
+          <View style={s.tableHead}><Text style={s.pos}>POS</Text><Text style={[s.flex,s.faint]}>PLAYER</Text><Text style={s.num}>P</Text><Text style={s.num}>W</Text><Text style={s.num}>B</Text><Text style={s.pts}>PTS</Text></View>
+          {players.map((p,i)=><View key={p.name} style={[s.tableRow,i>0&&s.divider]}>
+            <View style={[s.rank,i===0&&s.rankGold]}><Text style={s.rankText}>{p.position ?? i+1}</Text></View>
+            <Text numberOfLines={1} style={[s.flex,s.white]}>{p.name}</Text><Text style={s.num}>{p.gamesPlayed ?? p.played ?? 0}</Text><Text style={s.num}>{p.wins ?? 0}</Text><Text style={s.num}>{p.bounties ?? 0}</Text><Text style={s.pts}>{p.points ?? 0}</Text>
+          </View>)}
+        </Card>
       </View>;
     })}
-    <Pressable onPress={() => Linking.openURL('https://www.cyppoker.co.uk')}><Text style={s.webLink}>View the full league tables on cyppoker.co.uk →</Text></Pressable>
+    <Pressable onPress={() => setShowHistory(true)}><Text style={s.webLink}>View completed league games →</Text></Pressable>
   </>;
 }
 
 function Players({ data }: { data: Data }) {
-  const [query, setQuery] = useState('');
-  const [selected, setSelected] = useState<string | null>(null);
-  const rows = useMemo(() => {
-    const tournamentPlayers = data.tournaments.flatMap(t => t.players ?? []);
-    return data.players.filter(n => n.toLowerCase().includes(query.trim().toLowerCase())).map(name => {
-      const tour = tournamentPlayers.filter(p => p.name.toLowerCase() === name.toLowerCase());
-      const league = Object.values(data.leagues).flatMap(l => l.players ?? []).filter(p => p.name.toLowerCase() === name.toLowerCase());
-      return { name, tournamentWins: tour.filter(p => p.finish === 1).length, leagueWins: league.reduce((a, p) => a + Number(p.wins ?? 0), 0),
-        winnings: tour.reduce((a, p) => a + Number(p.winnings ?? 0), 0), points: league.reduce((a, p) => a + Number(p.points ?? 0), 0),
-        tournaments: tour.length, leaguePlayed: league.reduce((a, p) => a + Number(p.played ?? 0), 0) };
-    });
-  }, [data, query]);
-  if (selected) {
-    const row = rows.find(p => p.name === selected) ?? (() => {
-      const tour = data.tournaments.flatMap(t => t.players ?? []).filter(p => p.name.toLowerCase() === selected.toLowerCase());
-      const league = Object.values(data.leagues).flatMap(l => l.players ?? []).filter(p => p.name.toLowerCase() === selected.toLowerCase());
-      return { name:selected, tournamentWins:tour.filter(p => p.finish === 1).length, leagueWins:league.reduce((a,p)=>a+Number(p.wins??0),0),
-        winnings:tour.reduce((a,p)=>a+Number(p.winnings??0),0), points:league.reduce((a,p)=>a+Number(p.points??0),0), tournaments:tour.length,
-        leaguePlayed:league.reduce((a,p)=>a+Number(p.played??0),0) };
-    })();
-    const results = data.tournaments.filter(t => t.players?.some(p => p.name.toLowerCase() === selected.toLowerCase())).slice(0, 10);
-    return <><Pressable onPress={() => setSelected(null)}><Text style={s.back}>‹ Back to players</Text></Pressable>
-      <Title title={row.name} subtitle="CYP player profile" />
-      <View style={s.statsGrid}>
-        <Card><Text style={s.statValue}>{row.tournamentWins}</Text><Text style={s.faint}>Tournament wins</Text></Card>
-        <Card><Text style={s.statValue}>{row.leagueWins}</Text><Text style={s.faint}>League wins</Text></Card>
-        <Card><Text style={s.statValue}>{row.points}</Text><Text style={s.faint}>League points</Text></Card>
-        <Card><Text style={s.statValue}>{money(row.winnings)}</Text><Text style={s.faint}>Tournament winnings</Text></Card>
-      </View>
-      <Heading title="Recent tournament results" />
-      {results.length ? results.map((t, i) => {
-        const p = t.players?.find(x => x.name.toLowerCase() === selected.toLowerCase());
-        return <Card key={t.code || t.id || i}><View style={s.row}><View style={s.flex}>
-          <Text style={s.rowTitleSmall}>{t.typeLabel || t.name || 'Tournament'}</Text>
-          <Text style={s.faint}>{date(t.date)} · Finish {p?.finish ?? '—'}</Text>
-        </View><Text style={s.amountSmall}>{Number(p?.winnings ?? 0) > 0 ? money(p?.winnings) : ''}</Text></View></Card>;
-      }) : <Card><Text style={s.muted}>No tournament history is available for this player yet.</Text></Card>}
+  const [query,setQuery]=useState('');
+  const [selected,setSelected]=useState<PlayerProfile|null>(null);
+  const profiles=data.profiles.length ? data.profiles : data.players.map(name=>({name}));
+  const rows=profiles.filter(p=>p.name.toLowerCase().includes(query.trim().toLowerCase()));
+  if(selected){
+    const t=selected.tournament ?? {}, l=selected.league ?? {}, totals=l.totals ?? {};
+    return <><Pressable onPress={()=>setSelected(null)}><Text style={s.back}>‹ Back to players</Text></Pressable>
+      <Title title={selected.name} subtitle="Full player profile" />
+      <Heading title="Tournament Record" />
+      <View style={s.statRow}>{[['Games',t.games],['Wins',t.wins],['Cashes',t.cashes],['Eliminations',t.eliminations]].map(([label,v])=><View key={String(label)} style={s.miniStat}><Text style={s.statValue}>{v ?? 0}</Text><Text style={s.faint}>{label}</Text></View>)}</View>
+      <View style={s.statRow}><View style={s.miniStat}><Text style={s.statValue}>{money(t.winnings)}</Text><Text style={s.faint}>Winnings</Text></View><View style={s.miniStat}><Text style={s.statValue}>{money(t.totalSpent)}</Text><Text style={s.faint}>Total spent</Text></View><View style={s.miniStat}><Text style={s.statValue}>{t.averageFinish ?? '—'}</Text><Text style={s.faint}>Average finish</Text></View></View>
+      <Heading title="Tournament History" />
+      {(t.history??[]).length ? (t.history??[]).map((h,i)=><Card key={String(h.id??h.code??i)}><View style={s.row}><View style={s.flex}><Text style={s.rowTitleSmall}>{h.tournamentName||h.name||h.type||'Tournament'}</Text><Text style={s.faint}>{date(h.date)} · Finish {h.finish ?? '—'} · Spent {money(h.spent)}</Text></View><Text style={s.amountSmall}>{Number(h.winnings??0)>0?money(h.winnings):''}</Text></View></Card>) : <Card><Text style={s.muted}>No tournament history available.</Text></Card>}
+      <Heading title="League Record" />
+      <View style={s.statRow}>{[['Games',totals.games],['Wins',totals.wins],['Bounties',totals.bounties],['Points',totals.points]].map(([label,v])=><View key={String(label)} style={s.miniStat}><Text style={s.statValue}>{v ?? 0}</Text><Text style={s.faint}>{label}</Text></View>)}</View>
+      <View style={s.statRow}><View style={s.miniStat}><Text style={s.statValue}>{totals.averagePoints ?? '—'}</Text><Text style={s.faint}>Average points</Text></View><View style={s.miniStat}><Text style={s.statValue}>{totals.averagePosition ?? '—'}</Text><Text style={s.faint}>Average position</Text></View></View>
+      {(l.current?.division||l.current?.season) ? <Card gold><Text style={s.rowTitle}>{l.current?.division || 'Current league'}</Text><Text style={s.muted}>{l.current?.season}</Text></Card> : null}
+      <Heading title="Division History" />
+      {(l.seasons??[]).length ? (l.seasons??[]).map((x,i)=><Card key={i}><Text style={s.rowTitleSmall}>{x.divisionName||x.division||'League'} · {x.seasonName||x.season||''}</Text><Text style={s.muted}>{x.games??0} games · {x.wins??0} wins · {x.bounties??0} bounties · {x.points??0} pts</Text><Text style={s.faint}>Avg points {x.averagePoints??'—'} · Avg position {x.averagePosition??'—'}{x.finalPosition? ` · Final ${x.finalPosition}`:''}</Text></Card>) : <Card><Text style={s.muted}>No division history available.</Text></Card>}
+      <Heading title="League Game History" />
+      {(l.gameHistory??[]).length ? (l.gameHistory??[]).map((g,i)=>{
+        const me=(g.results??[]).find(r=>(r.player||r.name)?.toLowerCase()===selected.name.toLowerCase());
+        return <Card key={String(g.id??i)}><View style={s.row}><View style={s.flex}><Text style={s.rowTitleSmall}>{g.divisionName||g.division||'League'}{g.gameNumber?` · Game ${g.gameNumber}`:''}</Text><Text style={s.faint}>{date(g.date)} · Finish {me?.finish ?? '—'}</Text></View><Text style={s.amountSmall}>{me?.points ?? 0} pts</Text></View><Text style={s.muted}>{me?.bounties ?? 0} bounties</Text></Card>;
+      }) : <Card><Text style={s.muted}>No league game history available.</Text></Card>}
     </>;
   }
-  return <><Title title="Players" subtitle={`${data.players.length} CYP player profiles`} />
-    <View style={s.search}><Text style={s.searchIcon}>⌕</Text><TextInput value={query} onChangeText={setQuery}
-      placeholder="Search players" placeholderTextColor={C.muted} autoCorrect={false} style={s.input} /></View>
-    {rows.map(p => <Pressable key={p.name} onPress={() => setSelected(p.name)}><Card><View style={s.row}><View style={s.avatar}><Text style={s.gold}>{p.name[0]}</Text></View>
-      <View style={s.flex}><Text style={s.rowTitle}>{p.name}</Text><Text style={s.faint}>{p.tournamentWins + p.leagueWins} wins · {p.points} league points</Text></View>
-      <Text style={s.chevron}>›</Text></View></Card></Pressable>)}
+  return <><Title title="Players" subtitle={`${profiles.length} CYP player profiles`} />
+    <View style={s.search}><Text style={s.searchIcon}>⌕</Text><TextInput value={query} onChangeText={setQuery} placeholder="Search players" placeholderTextColor={C.muted} autoCorrect={false} style={s.input}/></View>
+    {rows.map(p=><Pressable key={p.name} onPress={()=>setSelected(p)}><Card><View style={s.row}><View style={s.avatar}><Text style={s.gold}>{p.name[0]}</Text></View><View style={s.flex}><Text style={s.rowTitle}>{p.name}</Text><Text style={s.faint}>{p.tournament?.wins ?? 0} tournament wins · {p.league?.totals?.points ?? 0} league points</Text></View><Text style={s.chevron}>›</Text></View></Card></Pressable>)}
   </>;
 }
 
@@ -288,7 +301,7 @@ const s = StyleSheet.create({
   searchIcon: { color: C.gold, fontSize: 24, marginRight: 9 }, input: { flex: 1, color: C.text, fontSize: 16 }, avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: C.raised, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   resultIcon: { width: 46, height: 46, borderRadius: 23, backgroundColor: C.gold, alignItems: 'center', justifyContent: 'center', marginRight: 12 }, resultIconText: { color: C.bg, fontSize: 25 },
   back: { color: C.gold, fontWeight: '800', fontSize: 14, marginTop: 18, marginBottom: -8 }, webLink: { color: C.gold, textAlign: 'center', fontWeight: '800', paddingVertical: 18 },
-  statsGrid: { gap: 0 }, statValue: { color: C.gold, fontSize: 24, fontWeight: '900' },
+  statsGrid: { gap: 0 }, statValue: { color: C.gold, fontSize: 21, fontWeight: '900' }, statRow: { flexDirection: 'row', gap: 8, marginBottom: 8 }, miniStat: { flex: 1, backgroundColor: C.panel, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#193855' },
   error: { backgroundColor: '#4a2029', borderRadius: 12, padding: 12, marginTop: 14 }, errorText: { color: '#ffb0b8' }, loader: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   tabs: { minHeight: 67, paddingTop: 7, paddingBottom: 5, flexDirection: 'row', backgroundColor: '#071b31', borderTopWidth: 1, borderTopColor: '#16324d' },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center' }, tabIcon: { color: '#7893ad', fontSize: 20, height: 25 }, tabLabel: { color: '#7893ad', fontSize: 9, fontWeight: '700' }, active: { color: C.gold },
