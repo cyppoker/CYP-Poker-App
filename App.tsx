@@ -17,8 +17,9 @@ type TournamentPlayer = { name: string; finish?: number; winnings?: number };
 type Tournament = { id?: number; code?: string; name?: string; typeLabel?: string; date?: string; winner?: string; entries?: number; prizePool?: number; players?: TournamentPlayer[] };
 type LeaguePlayer = { name: string; played?: number; wins?: number; points?: number };
 type League = { name?: string; gamesPlayed?: number; totalGames?: number; players?: LeaguePlayer[] };
+type UpcomingGame = { date?: string; time?: string; details?: string; status?: string };
 type Data = {
-  homepage: { nextTournament?: { date?: string; time?: string; details?: string } };
+  homepage: { nextTournament?: UpcomingGame; nextLeagues?: Record<string, UpcomingGame> };
   tournaments: Tournament[];
   leagues: Record<string, League>;
   players: string[];
@@ -60,6 +61,7 @@ function Title({ title, subtitle }: { title: string; subtitle: string }) {
 
 function Home({ data, go }: { data: Data; go: (tab: Tab) => void }) {
   const next = data.homepage.nextTournament;
+  const nextLeagues = Object.entries(data.homepage.nextLeagues ?? {}).filter(([, game]) => game?.status !== 'tbc' && (game?.date || game?.details));
   const latest = data.tournaments[0];
   const leagues = Object.entries(data.leagues).filter(([, l]) => l.players?.length);
   const winner = latest?.players?.find(p => p.finish === 1);
@@ -76,6 +78,15 @@ function Home({ data, go }: { data: Data; go: (tab: Tab) => void }) {
       <Text style={s.gold}>{date(next?.date)}{next?.time ? `  ·  ${next.time}` : ''}</Text>
       <Text style={s.hint}>Tap to view tournament information →</Text>
     </Card></Pressable>
+    {nextLeagues.length > 0 && <>
+      <Heading title="Upcoming league games" action="LEAGUES" />
+      <Card>{nextLeagues.map(([key, game], i) => <Pressable key={key} onPress={() => go('Leagues')} style={[s.row, s.listRow, i > 0 && s.divider]}>
+        <View style={s.flex}>
+          <Text style={s.rowTitleSmall}>{cleanText(game.details) || key}</Text>
+          <Text style={s.faint}>{date(game.date)}{game.time ? ` · ${game.time}` : ''}</Text>
+        </View><Text style={s.chevron}>›</Text>
+      </Pressable>)}</Card>
+    </>}
     <Heading title="Latest winner" action="RESULTS" />
     <Pressable onPress={() => go('Results')}><Card><View style={s.row}>
       <View style={s.badge}><Text style={s.badgeText}>🏆</Text></View>
@@ -97,9 +108,17 @@ function Home({ data, go }: { data: Data; go: (tab: Tab) => void }) {
 
 function Games({ data }: { data: Data }) {
   const next = data.homepage.nextTournament;
+  const nextLeagues = Object.entries(data.homepage.nextLeagues ?? {}).filter(([, game]) => game?.status !== 'tbc' && (game?.date || game?.details));
   return <><Title title="Tournaments" subtitle="What’s coming up and what’s been played" />
     <Heading title="Upcoming" /><Card gold><Text style={s.feature}>{cleanText(next?.details) || 'Tournament to be announced'}</Text>
       <Text style={s.gold}>{date(next?.date)}{next?.time ? `  ·  ${next.time}` : ''}</Text></Card>
+    {nextLeagues.length > 0 && <>
+      <Heading title="Upcoming league games" />
+      {nextLeagues.map(([key, game]) => <Card key={key}>
+        <Text style={s.rowTitle}>{cleanText(game.details) || key}</Text>
+        <Text style={s.gold}>{date(game.date)}{game.time ? ` · ${game.time}` : ''}</Text>
+      </Card>)}
+    </>}
     <Heading title="Recent tournaments" />
     {data.tournaments.slice(0, 12).map((t, i) => <Card key={t.code || t.id || i}><View style={s.row}>
       <View style={s.flex}><Text style={s.rowTitle}>{t.typeLabel || t.name || 'Tournament'}</Text>
