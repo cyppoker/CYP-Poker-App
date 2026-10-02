@@ -1,7 +1,7 @@
 import { StatusBar } from 'expo-status-bar';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-  ActivityIndicator, Image, Pressable, RefreshControl, SafeAreaView, ScrollView,
+  ActivityIndicator, Image, Linking, Pressable, RefreshControl, SafeAreaView, ScrollView,
   StyleSheet, Text, TextInput, View,
 } from 'react-native';
 
@@ -14,7 +14,7 @@ const CLUB = {
 
 type Tab = 'Home' | 'Games' | 'Leagues' | 'Players' | 'Results';
 type TournamentPlayer = { name: string; finish?: number; winnings?: number };
-type Tournament = { id?: number; code?: string; name?: string; typeLabel?: string; date?: string; winner?: string; entries?: number; prizePool?: number; players?: TournamentPlayer[] };
+type Tournament = { id?: number; code?: string; name?: string; typeLabel?: string; date?: string; winner?: string; entries?: number; prizePool?: number; buyIn?: number; startingStack?: number; paidPlaces?: number; players?: TournamentPlayer[] };
 type LeaguePlayer = { name: string; played?: number; wins?: number; points?: number };
 type League = { name?: string; gamesPlayed?: number; totalGames?: number; players?: LeaguePlayer[] };
 type UpcomingGame = { date?: string; time?: string; details?: string; status?: string };
@@ -107,8 +107,26 @@ function Home({ data, go }: { data: Data; go: (tab: Tab) => void }) {
 }
 
 function Games({ data }: { data: Data }) {
+  const [selected, setSelected] = useState<Tournament | null>(null);
   const next = data.homepage.nextTournament;
   const nextLeagues = Object.entries(data.homepage.nextLeagues ?? {}).filter(([, game]) => game?.status !== 'tbc' && (game?.date || game?.details));
+  if (selected) {
+    const finishers = [...(selected.players ?? [])].sort((a, b) => Number(a.finish ?? 999) - Number(b.finish ?? 999));
+    return <><Pressable onPress={() => setSelected(null)}><Text style={s.back}>‹ Back to tournaments</Text></Pressable>
+      <Title title={selected.typeLabel || selected.name || 'Tournament'} subtitle={date(selected.date)} />
+      <Card gold>
+        <Text style={s.rowTitle}>{selected.entries ?? 0} entries · Prize pool {money(selected.prizePool)}</Text>
+        {selected.buyIn ? <Text style={s.muted}>Buy-in {money(selected.buyIn)}</Text> : null}
+        {selected.startingStack ? <Text style={s.muted}>Starting stack {Number(selected.startingStack).toLocaleString('en-GB')}</Text> : null}
+      </Card>
+      <Heading title="Final standings" />
+      {finishers.length ? <Card>{finishers.map((p, i) => <View key={`${p.name}-${i}`} style={[s.tableRow, i > 0 && s.divider]}>
+        <View style={[s.rank, p.finish === 1 && s.rankGold]}><Text style={s.rankText}>{p.finish ?? i + 1}</Text></View>
+        <Text numberOfLines={1} style={[s.flex, s.white]}>{p.name}</Text>
+        <Text style={s.amountSmall}>{Number(p.winnings ?? 0) > 0 ? money(p.winnings) : ''}</Text>
+      </View>)}</Card> : <Card><Text style={s.muted}>No player standings are available for this tournament.</Text></Card>}
+    </>;
+  }
   return <><Title title="Tournaments" subtitle="What’s coming up and what’s been played" />
     <Heading title="Upcoming" /><Card gold><Text style={s.feature}>{cleanText(next?.details) || 'Tournament to be announced'}</Text>
       <Text style={s.gold}>{date(next?.date)}{next?.time ? `  ·  ${next.time}` : ''}</Text></Card>
@@ -120,11 +138,11 @@ function Games({ data }: { data: Data }) {
       </Card>)}
     </>}
     <Heading title="Recent tournaments" />
-    {data.tournaments.slice(0, 12).map((t, i) => <Card key={t.code || t.id || i}><View style={s.row}>
+    {data.tournaments.slice(0, 12).map((t, i) => <Pressable key={t.code || t.id || i} onPress={() => setSelected(t)}><Card><View style={s.row}>
       <View style={s.flex}><Text style={s.rowTitle}>{t.typeLabel || t.name || 'Tournament'}</Text>
         <Text style={s.faint}>{date(t.date)} · {t.entries ?? 0} entries</Text></View><Text style={s.chevron}>›</Text>
     </View><Text style={s.muted}>Winner  <Text style={s.white}>{t.winner || '—'}</Text></Text>
-      <Text style={s.muted}>Prize pool  <Text style={s.gold}>{money(t.prizePool)}</Text></Text></Card>)}
+      <Text style={s.muted}>Prize pool  <Text style={s.gold}>{money(t.prizePool)}</Text></Text></Card></Pressable>)}
   </>;
 }
 
@@ -142,26 +160,56 @@ function Leagues({ data }: { data: Data }) {
           </View>)}</Card>
       </View>;
     })}
+    <Pressable onPress={() => Linking.openURL('https://www.cyppoker.co.uk')}><Text style={s.webLink}>View the full league tables on cyppoker.co.uk →</Text></Pressable>
   </>;
 }
 
 function Players({ data }: { data: Data }) {
   const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState<string | null>(null);
   const rows = useMemo(() => {
     const tournamentPlayers = data.tournaments.flatMap(t => t.players ?? []);
     return data.players.filter(n => n.toLowerCase().includes(query.trim().toLowerCase())).map(name => {
       const tour = tournamentPlayers.filter(p => p.name.toLowerCase() === name.toLowerCase());
       const league = Object.values(data.leagues).flatMap(l => l.players ?? []).filter(p => p.name.toLowerCase() === name.toLowerCase());
-      return { name, wins: tour.filter(p => p.finish === 1).length + league.reduce((a, p) => a + Number(p.wins ?? 0), 0),
-        winnings: tour.reduce((a, p) => a + Number(p.winnings ?? 0), 0), points: league.reduce((a, p) => a + Number(p.points ?? 0), 0) };
+      return { name, tournamentWins: tour.filter(p => p.finish === 1).length, leagueWins: league.reduce((a, p) => a + Number(p.wins ?? 0), 0),
+        winnings: tour.reduce((a, p) => a + Number(p.winnings ?? 0), 0), points: league.reduce((a, p) => a + Number(p.points ?? 0), 0),
+        tournaments: tour.length, leaguePlayed: league.reduce((a, p) => a + Number(p.played ?? 0), 0) };
     });
   }, [data, query]);
+  if (selected) {
+    const row = rows.find(p => p.name === selected) ?? (() => {
+      const tour = data.tournaments.flatMap(t => t.players ?? []).filter(p => p.name.toLowerCase() === selected.toLowerCase());
+      const league = Object.values(data.leagues).flatMap(l => l.players ?? []).filter(p => p.name.toLowerCase() === selected.toLowerCase());
+      return { name:selected, tournamentWins:tour.filter(p => p.finish === 1).length, leagueWins:league.reduce((a,p)=>a+Number(p.wins??0),0),
+        winnings:tour.reduce((a,p)=>a+Number(p.winnings??0),0), points:league.reduce((a,p)=>a+Number(p.points??0),0), tournaments:tour.length,
+        leaguePlayed:league.reduce((a,p)=>a+Number(p.played??0),0) };
+    })();
+    const results = data.tournaments.filter(t => t.players?.some(p => p.name.toLowerCase() === selected.toLowerCase())).slice(0, 10);
+    return <><Pressable onPress={() => setSelected(null)}><Text style={s.back}>‹ Back to players</Text></Pressable>
+      <Title title={row.name} subtitle="CYP player profile" />
+      <View style={s.statsGrid}>
+        <Card><Text style={s.statValue}>{row.tournamentWins}</Text><Text style={s.faint}>Tournament wins</Text></Card>
+        <Card><Text style={s.statValue}>{row.leagueWins}</Text><Text style={s.faint}>League wins</Text></Card>
+        <Card><Text style={s.statValue}>{row.points}</Text><Text style={s.faint}>League points</Text></Card>
+        <Card><Text style={s.statValue}>{money(row.winnings)}</Text><Text style={s.faint}>Tournament winnings</Text></Card>
+      </View>
+      <Heading title="Recent tournament results" />
+      {results.length ? results.map((t, i) => {
+        const p = t.players?.find(x => x.name.toLowerCase() === selected.toLowerCase());
+        return <Card key={t.code || t.id || i}><View style={s.row}><View style={s.flex}>
+          <Text style={s.rowTitleSmall}>{t.typeLabel || t.name || 'Tournament'}</Text>
+          <Text style={s.faint}>{date(t.date)} · Finish {p?.finish ?? '—'}</Text>
+        </View><Text style={s.amountSmall}>{Number(p?.winnings ?? 0) > 0 ? money(p?.winnings) : ''}</Text></View></Card>;
+      }) : <Card><Text style={s.muted}>No tournament history is available for this player yet.</Text></Card>}
+    </>;
+  }
   return <><Title title="Players" subtitle={`${data.players.length} CYP player profiles`} />
     <View style={s.search}><Text style={s.searchIcon}>⌕</Text><TextInput value={query} onChangeText={setQuery}
       placeholder="Search players" placeholderTextColor={C.muted} autoCorrect={false} style={s.input} /></View>
-    {rows.map(p => <Card key={p.name}><View style={s.row}><View style={s.avatar}><Text style={s.gold}>{p.name[0]}</Text></View>
-      <View style={s.flex}><Text style={s.rowTitle}>{p.name}</Text><Text style={s.faint}>{p.wins} wins · {p.points} league points</Text></View>
-      <Text style={s.amountSmall}>{money(p.winnings)}</Text></View></Card>)}
+    {rows.map(p => <Pressable key={p.name} onPress={() => setSelected(p.name)}><Card><View style={s.row}><View style={s.avatar}><Text style={s.gold}>{p.name[0]}</Text></View>
+      <View style={s.flex}><Text style={s.rowTitle}>{p.name}</Text><Text style={s.faint}>{p.tournamentWins + p.leagueWins} wins · {p.points} league points</Text></View>
+      <Text style={s.chevron}>›</Text></View></Card></Pressable>)}
   </>;
 }
 
@@ -232,6 +280,8 @@ const s = StyleSheet.create({
   pts: { width: 40, color: C.gold, textAlign: 'right', fontWeight: '900' }, search: { height: 48, flexDirection: 'row', alignItems: 'center', backgroundColor: C.panel, borderRadius: 14, paddingHorizontal: 14, marginTop: 16, marginBottom: 12 },
   searchIcon: { color: C.gold, fontSize: 24, marginRight: 9 }, input: { flex: 1, color: C.text, fontSize: 16 }, avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: C.raised, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   resultIcon: { width: 46, height: 46, borderRadius: 23, backgroundColor: C.gold, alignItems: 'center', justifyContent: 'center', marginRight: 12 }, resultIconText: { color: C.bg, fontSize: 25 },
+  back: { color: C.gold, fontWeight: '800', fontSize: 14, marginTop: 18, marginBottom: -8 }, webLink: { color: C.gold, textAlign: 'center', fontWeight: '800', paddingVertical: 18 },
+  statsGrid: { gap: 0 }, statValue: { color: C.gold, fontSize: 24, fontWeight: '900' },
   error: { backgroundColor: '#4a2029', borderRadius: 12, padding: 12, marginTop: 14 }, errorText: { color: '#ffb0b8' }, loader: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   tabs: { minHeight: 67, paddingTop: 7, paddingBottom: 5, flexDirection: 'row', backgroundColor: '#071b31', borderTopWidth: 1, borderTopColor: '#16324d' },
   tab: { flex: 1, alignItems: 'center', justifyContent: 'center' }, tabIcon: { color: '#7893ad', fontSize: 20, height: 25 }, tabLabel: { color: '#7893ad', fontSize: 9, fontWeight: '700' }, active: { color: C.gold },
