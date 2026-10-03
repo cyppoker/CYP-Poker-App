@@ -13,8 +13,11 @@ const CLUB = {
 } as const;
 
 type Tab = 'Home' | 'Games' | 'Leagues' | 'Players' | 'Results';
-type TournamentPlayer = { name: string; finish?: number; winnings?: number; spent?: number; buyIn?: number; rebuys?: number; bountyWon?: number; finalBounty?: number };
-type Tournament = { id?: number; code?: string; name?: string; typeLabel?: string; tournamentType?: string; date?: string; winner?: string; entries?: number; prizePool?: number; buyIn?: number; startingStack?: number; paidPlaces?: number; format?: string; theme?: string; charityRaised?: number; players?: TournamentPlayer[]; finishingOrder?: TournamentPlayer[] };
+type SpendItem = { type?: string; count?: number; amount?: number };
+type TournamentPlayer = { name?: string; player?: string; finish?: number; winnings?: number; spent?: number; buyIn?: number; rebuys?: number; bountyWon?: number; finalBounty?: number; spend?: { buyIn?: number; extras?: number; total?: number; items?: SpendItem[] } };
+type TournamentElimination = { player?: string; finish?: number; eliminatedBy?: string; at?: number };
+type HomepageWinner = { kind?: 'tournament'|'league'; id?: number; code?: string; name?: string; typeLabel?: string; date?: string; winner?: string; entries?: number; prizePool?: number; completedAt?: number; divisionKey?: string; divisionName?: string; gameNumber?: number; points?: number; bounties?: number; entrants?: number; tournamentCode?: string };
+type Tournament = { id?: number; code?: string; name?: string; typeLabel?: string; tournamentType?: string; date?: string; winner?: string; entries?: number; prizePool?: number; buyIn?: number; startingStack?: number; paidPlaces?: number; format?: string; theme?: string; charityRaised?: number; chipsInPlay?: number; durationSeconds?: number; startedAt?: number; completedAt?: number; players?: TournamentPlayer[]; finishingOrder?: TournamentPlayer[]; eliminations?: TournamentElimination[] };
 type LeaguePlayer = { name: string; played?: number; gamesPlayed?: number; wins?: number; bounties?: number; points?: number; averagePoints?: number; averagePosition?: number; position?: number };
 type League = { name?: string; seasonName?: string; gamesPlayed?: number; totalGames?: number; gamesRemaining?: number; gamesPerPlayer?: number; playersPerGame?: number; players?: LeaguePlayer[]; table?: LeaguePlayer[] };
 type UpcomingGame = { date?: string; time?: string; details?: string; status?: string };
@@ -28,7 +31,7 @@ type LiveSeat = { seat?: number|string; player?: string; locked?: boolean };
 type LiveTable = { table?: number|string; seats?: LiveSeat[] };
 type LiveGame = { code?: string; name?: string; typeLabel?: string; format?: string; theme?: string; date?: string; levelIndex?: number; currentLevel?: any; nextLevel?: any; clock?: { secondsRemaining?: number; running?: boolean; paused?: boolean; isBreak?: boolean }; entries?: number; playersRemaining?: number; players?: any[]; startingStack?: number; chipsInPlay?: number; averageStack?: number; prizePool?: number; charityRaised?: number; paidPlaces?: number; payoutType?: string; payoutAmounts?: number[]; seating?: { finalTable?: boolean; tables?: LiveTable[] }; tableBalanceAlert?: any; mysteryBounty?: any } ;
 type Data = {
-  homepage: { nextTournament?: UpcomingGame; nextLeagues?: Record<string, UpcomingGame>; latestWinners?: any[]; latestLeagueWinners?: any[]; leagueLeaders?: any[]; liveGames?: LiveGame[] };
+  homepage: { nextTournament?: UpcomingGame; nextLeagues?: Record<string, UpcomingGame>; latestWinners?: HomepageWinner[]; latestTournamentWinners?: HomepageWinner[]; latestLeagueWinners?: HomepageWinner[]; leagueLeaders?: any[]; liveGames?: LiveGame[] };
   tournaments: Tournament[];
   leagues: Record<string, League>;
   players: string[];
@@ -75,6 +78,23 @@ function blindLine(level: any) {
   const small = level.small ?? level.smallBlind, big = level.big ?? level.bigBlind, ante = level.ante;
   if (small != null && big != null) return `${number(small)} / ${number(big)}${Number(ante ?? 0) > 0 ? ` · Ante ${number(ante)}` : ''}`;
   return String(level.label ?? level.name ?? '');
+}
+function duration(value?: number) {
+  const total = Math.max(0, Number(value ?? 0));
+  const hours = Math.floor(total / 3600), minutes = Math.floor((total % 3600) / 60);
+  return hours ? `${hours}h ${minutes}m` : `${minutes}m`;
+}
+function playerName(player?: TournamentPlayer) { return String(player?.name || player?.player || ''); }
+function extrasLabel(player?: TournamentPlayer) {
+  const items = player?.spend?.items ?? [];
+  const parts = items.filter(item => item.type && item.type !== 'buyIn' && item.type !== 'entry').map(item => {
+    const count = Number(item.count ?? 0);
+    const names: Record<string,string> = { rebuy:'rebuy', addOn:'add-on', reserveStack:'reserve stack', lifeline:'lifeline', startingBounty:'starting bounty' };
+    const label = names[String(item.type)] || String(item.type);
+    return count > 1 ? `${count} ${label}s` : label;
+  });
+  if (!parts.length && Number(player?.rebuys ?? 0) > 0) parts.push(`${player?.rebuys} rebuy${player?.rebuys === 1 ? '' : 's'}`);
+  return parts.join(' · ');
 }
 function date(value?: string) {
   if (!value) return 'Date to be confirmed';
@@ -156,13 +176,19 @@ function Home({ data, go }: { data: Data; go: (tab: Tab) => void }) {
         </View><Text style={s.chevron}>›</Text>
       </Pressable>)}</Card>
     </>}
-    <Heading title="Latest winner" action="RESULTS" />
-    <Pressable onPress={() => go('Results')}><Card><View style={s.row}>
-      <View style={s.badge}><Text style={s.badgeText}>🏆</Text></View>
-      <View style={s.flex}><Text style={s.rowTitle}>{latest?.winner || 'No winner yet'}</Text>
-        <Text style={s.muted}>{latest?.typeLabel || latest?.name || 'Tournament'}</Text><Text style={s.faint}>{date(latest?.date)}</Text>
-      </View><Text style={s.amount}>{money(winner?.winnings)}</Text>
-    </View></Card></Pressable>
+    <Heading title="Latest tournament & league winners" action="RESULTS" />
+    <Card>{(data.homepage.latestWinners ?? []).length ? (data.homepage.latestWinners ?? []).map((item, i) => {
+      const tournament = item.kind === 'tournament' ? data.tournaments.find(t => (item.id && t.id === item.id) || (item.code && t.code === item.code)) : undefined;
+      const winningPlayer = tournament?.players?.find(p => Number(p.finish) === 1);
+      return <Pressable key={`${item.kind}-${item.id ?? item.code ?? i}`} onPress={() => go('Results')} style={[s.row, s.listRow, i > 0 && s.divider]}>
+        <View style={s.badge}><Text style={s.badgeText}>{item.kind === 'league' ? '♛' : '🏆'}</Text></View>
+        <View style={s.flex}><Text style={s.rowTitle}>{item.winner || 'Winner'}</Text>
+          <Text style={s.muted}>{item.kind === 'league' ? `${item.divisionName || 'League'} · Game ${item.gameNumber ?? ''}` : (item.typeLabel || item.name || 'Tournament')}</Text>
+          <Text style={s.faint}>{date(item.date)}</Text>
+        </View>
+        <Text style={s.amountSmall}>{item.kind === 'league' ? `${item.points ?? 0} pts` : (Number(winningPlayer?.winnings ?? 0) > 0 ? money(winningPlayer?.winnings) : '')}</Text>
+      </Pressable>;
+    }) : <Text style={s.muted}>No recent winners yet.</Text>}</Card>
     <Heading title="League leaders" action="TABLES" />
     <Card>{leagues.map(([key, league], i) => {
       const leader = [...(league.players ?? [])].sort((a, b) => Number(b.points) - Number(a.points))[0];
@@ -181,7 +207,10 @@ function Games({ data }: { data: Data }) {
   const nextLeagues = Object.entries(data.homepage.nextLeagues ?? {}).filter(([, game]) => game?.status !== 'tbc' && (game?.date || game?.details));
 
   if (selected) {
-    const finishers = [...(selected.finishingOrder ?? selected.players ?? [])].sort((a, b) => Number(a.finish ?? 999) - Number(b.finish ?? 999));
+    const finishers = [...(selected.players?.length ? selected.players : (selected.finishingOrder ?? []))].sort((a, b) => Number(a.finish ?? 999) - Number(b.finish ?? 999));
+    const eliminationRows = selected.eliminations ?? [];
+    const eliminationCounts = new Map<string, number>();
+    eliminationRows.forEach(e => { const by = String(e.eliminatedBy || ''); if (by && by.toLowerCase() !== 'winner') eliminationCounts.set(by, (eliminationCounts.get(by) ?? 0) + 1); });
     return <><Pressable onPress={() => setSelected(null)}><Text style={s.back}>‹ Back to tournaments</Text></Pressable>
       <Title title={selected.typeLabel || selected.name || 'Tournament'} subtitle={date(selected.date)} />
       <Card gold>
@@ -190,16 +219,24 @@ function Games({ data }: { data: Data }) {
         {selected.buyIn ? <Text style={s.muted}>Buy-in {money(selected.buyIn)}</Text> : null}
         {selected.startingStack ? <Text style={s.muted}>Starting stack {number(selected.startingStack)}</Text> : null}
         {selected.paidPlaces ? <Text style={s.muted}>{selected.paidPlaces} paid places</Text> : null}
+        {selected.chipsInPlay ? <Text style={s.muted}>Chips in play {number(selected.chipsInPlay)}</Text> : null}
+        {selected.durationSeconds ? <Text style={s.muted}>Duration {duration(selected.durationSeconds)}</Text> : null}
         {selected.charityRaised ? <Text style={s.muted}>Charity raised {money(selected.charityRaised)}</Text> : null}
       </Card>
       <Heading title="Final standings" />
-      {finishers.length ? <Card>{finishers.map((p, i) => <View key={`${p.name}-${i}`} style={[s.resultRow, i > 0 && s.divider]}>
-        <View style={[s.rank, p.finish === 1 && s.rankGold]}><Text style={s.rankText}>{p.finish ?? i + 1}</Text></View>
-        <View style={s.flex}><Text numberOfLines={1} style={s.white}>{p.name}</Text>
-          <Text style={s.faint}>{p.spent != null ? `Spent ${money(p.spent)}` : ''}{p.rebuys != null ? ` · ${p.rebuys} rebuy${p.rebuys === 1 ? '' : 's'}` : ''}{p.bountyWon ? ` · Bounties ${money(p.bountyWon)}` : ''}</Text>
-        </View>
-        <Text style={s.amountSmall}>{Number(p.winnings ?? 0) > 0 ? money(p.winnings) : ''}</Text>
-      </View>)}</Card> : <Card><Text style={s.muted}>No player standings are available for this tournament.</Text></Card>}
+      {finishers.length ? <Card>{finishers.map((p, i) => {
+        const name = playerName(p);
+        const out = eliminationRows.find(e => e.player === name);
+        const extras = extrasLabel(p);
+        return <View key={`${name}-${i}`} style={[s.resultRow, i > 0 && s.divider]}>
+          <View style={[s.rank, p.finish === 1 && s.rankGold]}><Text style={s.rankText}>{p.finish ?? i + 1}</Text></View>
+          <View style={s.flex}><Text numberOfLines={1} style={s.white}>{name || 'Unknown player'}</Text>
+            <Text style={s.faint}>{p.spent != null ? `Spent ${money(p.spent)}` : ''}{extras ? ` · ${extras}` : ''}</Text>
+            <Text style={s.faint}>{p.finish === 1 ? 'Winner' : out?.eliminatedBy ? `Eliminated by ${out.eliminatedBy}` : ''}{` · Eliminations ${eliminationCounts.get(name) ?? 0}`}</Text>
+          </View>
+          <Text style={s.amountSmall}>{Number(p.winnings ?? 0) > 0 ? money(p.winnings) : ''}</Text>
+        </View>;
+      })}</Card> : <Card><Text style={s.muted}>No player standings are available for this tournament.</Text></Card>}
     </>;
   }
 
