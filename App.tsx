@@ -8,7 +8,7 @@ import {
 const CLUB = {
   id: 'cyp',
   name: 'CYP Poker',
-  api: 'https://development.cyp-poker.pages.dev',
+  api: 'https://www.cyppoker.co.uk',
   colours: { bg: '#061426', panel: '#0d2745', raised: '#12365d', gold: '#efc250', blue: '#2788e7', text: '#fff', muted: '#a9bfd6' },
 } as const;
 
