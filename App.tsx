@@ -92,6 +92,7 @@ function Title({ title, subtitle }: { title: string; subtitle: string }) {
 }
 
 function Home({ data, go }: { data: Data; go: (tab: Tab) => void }) {
+  const [selectedLive, setSelectedLive] = useState<LiveGame | null>(null);
   const next = data.homepage.nextTournament;
   const nextLeagues = Object.entries(data.homepage.nextLeagues ?? {}).filter(([, game]) => game?.status !== 'tbc' && (game?.date || game?.details));
   const latest = data.tournaments[0];
@@ -178,7 +179,6 @@ function Home({ data, go }: { data: Data; go: (tab: Tab) => void }) {
 
 function Games({ data }: { data: Data }) {
   const [selected, setSelected] = useState<Tournament | null>(null);
-  const [selectedLive, setSelectedLive] = useState<LiveGame | null>(null);
   const next = data.homepage.nextTournament;
   const nextLeagues = Object.entries(data.homepage.nextLeagues ?? {}).filter(([, game]) => game?.status !== 'tbc' && (game?.date || game?.details));
 
