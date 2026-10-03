@@ -90,19 +90,6 @@ function Heading({ title, action }: { title: string; action?: string }) {
 function Title({ title, subtitle }: { title: string; subtitle: string }) {
   return <View style={s.titleWrap}><Text style={s.title}>{title}</Text><Text style={s.subtitle}>{subtitle}</Text></View>;
 }
-function LiveCountdown({ source, suffix = ' remaining' }: { source?: LiveGame['clock']; suffix?: string }) {
-  const [seconds, setSeconds] = useState(Math.max(0, Number(source?.secondsRemaining ?? 0)));
-  useEffect(() => {
-    setSeconds(Math.max(0, Number(source?.secondsRemaining ?? 0)));
-  }, [source?.secondsRemaining, source?.running, source?.paused]);
-  useEffect(() => {
-    if (!source?.running || source?.paused) return;
-    const id = setInterval(() => setSeconds(v => Math.max(0, v - 1)), 1000);
-    return () => clearInterval(id);
-  }, [source?.running, source?.paused]);
-  return <Text style={s.gold}>{clock(seconds)}{suffix}</Text>;
-}
-
 function Home({ data, go }: { data: Data; go: (tab: Tab) => void }) {
   const [selectedLive, setSelectedLive] = useState<LiveGame | null>(null);
   const next = data.homepage.nextTournament;
@@ -118,8 +105,7 @@ function Home({ data, go }: { data: Data; go: (tab: Tab) => void }) {
       <Card gold>
         <Text style={s.pill}>LIVE</Text>
         <Text style={s.feature}>{g.clock?.isBreak ? 'Break' : blindLine(g.currentLevel) || `Level ${Number(g.levelIndex ?? 0) + 1}`}</Text>
-        <LiveCountdown source={g.clock} />
-        <Text style={s.muted}>{g.clock?.running ? 'Clock running' : g.clock?.paused ? 'Clock paused' : ''}</Text>
+        <Text style={s.muted}>{g.clock?.isBreak ? 'Break in progress' : g.clock?.running ? 'Level in progress' : g.clock?.paused ? 'Clock paused' : ''}</Text>
       </Card>
       <Heading title="Tournament status" />
       <View style={s.statRow}>
@@ -152,7 +138,6 @@ function Home({ data, go }: { data: Data; go: (tab: Tab) => void }) {
       <View style={s.row}><View style={s.flex}><Text style={s.pill}>LIVE</Text><Text style={s.rowTitle}>{g.typeLabel||g.name||'Tournament'}</Text>
         <Text style={s.muted}>{g.playersRemaining ?? 0} remaining · Avg stack {number(g.averageStack)}</Text>
         <Text style={s.gold}>{g.clock?.isBreak?'Break':blindLine(g.currentLevel) || `Level ${Number(g.levelIndex??0)+1}`}</Text>
-        <LiveCountdown source={g.clock} suffix="" />
       </View><Text style={s.chevron}>›</Text></View>
     </Card></Pressable>)}</>}
     <Heading title="Next tournament" action="VIEW ALL" />
@@ -357,7 +342,7 @@ export default function App() {
       } catch {
         // Keep the last good live snapshot; the next interval or manual refresh can recover.
       }
-    }, 8000);
+    }, 5000);
     return () => clearInterval(id);
   }, [data.liveGames.length]);
   const content = tab === 'Home' ? <Home data={data} go={setTab} /> : tab === 'Games' ? <Games data={data} /> :
