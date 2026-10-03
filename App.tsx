@@ -275,6 +275,15 @@ function Leagues({ data }: { data: Data }) {
     </Card>) : <Card><Text style={s.muted}>No completed league games are available yet.</Text></Card>}
   </>;
   return <><Title title="Leagues" subtitle="Current CYP standings" />
+    <Pressable onPress={() => setShowHistory(true)}>
+      <View style={s.leagueHistoryButton}>
+        <View style={s.flex}>
+          <Text style={s.leagueHistoryTitle}>Completed League Games</Text>
+          <Text style={s.leagueHistorySub}>View previous league results and finishing orders</Text>
+        </View>
+        <Text style={s.leagueHistoryChevron}>›</Text>
+      </View>
+    </Pressable>
     {Object.entries(data.leagues).filter(([, l]) => (l.table?.length || l.players?.length)).map(([key, league]) => {
       const players = [...(league.table ?? league.players ?? [])].sort((a,b)=>Number(a.position??999)-Number(b.position??999) || Number(b.points)-Number(a.points));
       return <View key={key}><Heading title={league.name || key} action={`${league.gamesPlayed ?? 0}/${league.totalGames ?? 0} GAMES`} />
@@ -287,7 +296,6 @@ function Leagues({ data }: { data: Data }) {
         </Card>
       </View>;
     })}
-    <Pressable onPress={() => setShowHistory(true)}><Text style={s.webLink}>View completed league games →</Text></Pressable>
   </>;
 }
 
@@ -424,6 +432,10 @@ const s = StyleSheet.create({
   searchIcon: { color: C.gold, fontSize: 24, marginRight: 9 }, input: { flex: 1, color: C.text, fontSize: 16 }, avatar: { width: 42, height: 42, borderRadius: 21, backgroundColor: C.raised, alignItems: 'center', justifyContent: 'center', marginRight: 12 },
   resultIcon: { width: 46, height: 46, borderRadius: 23, backgroundColor: C.gold, alignItems: 'center', justifyContent: 'center', marginRight: 12 }, resultIconText: { color: C.bg, fontSize: 25 },
   back: { color: C.gold, fontWeight: '800', fontSize: 14, marginTop: 18, marginBottom: -8 }, webLink: { color: C.gold, textAlign: 'center', fontWeight: '800', paddingVertical: 18 },
+  leagueHistoryButton: { flexDirection: 'row', alignItems: 'center', backgroundColor: C.raised, borderRadius: 16, borderWidth: 1, borderColor: '#806c34', paddingHorizontal: 18, paddingVertical: 17, marginTop: 12, marginBottom: 6 },
+  leagueHistoryTitle: { color: C.gold, fontWeight: '900', fontSize: 17 },
+  leagueHistorySub: { color: C.muted, fontSize: 12, marginTop: 3 },
+  leagueHistoryChevron: { color: C.gold, fontSize: 30, fontWeight: '800', marginLeft: 12 },
   statsGrid: { gap: 0 }, statValue: { color: C.gold, fontSize: 21, fontWeight: '900' }, statRow: { flexDirection: 'row', gap: 8, marginBottom: 8 }, miniStat: { flex: 1, backgroundColor: C.panel, borderRadius: 14, padding: 12, borderWidth: 1, borderColor: '#193855' },
   error: { backgroundColor: '#4a2029', borderRadius: 12, padding: 12, marginTop: 14 }, errorText: { color: '#ffb0b8' }, loader: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 12 },
   tabs: { minHeight: 67, paddingTop: 7, paddingBottom: 5, flexDirection: 'row', backgroundColor: '#071b31', borderTopWidth: 1, borderTopColor: '#16324d' },
