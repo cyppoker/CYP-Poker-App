@@ -20,6 +20,12 @@
     },
     "web": {
       "favicon": "./assets/favicon.png"
+    },
+    "owner": "cwgpokers-team",
+    "extra": {
+      "eas": {
+        "projectId": "b9c82501-d543-4d23-982f-207ffba274e2"
+      }
     }
   }
 }
