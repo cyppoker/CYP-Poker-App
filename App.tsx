@@ -87,13 +87,14 @@ function duration(value?: number) {
 function playerName(player?: TournamentPlayer) { return String(player?.name || player?.player || ''); }
 function extrasLabel(player?: TournamentPlayer) {
   const items = player?.spend?.items ?? [];
-  const parts = items.filter(item => item.type && item.type !== 'buyIn' && item.type !== 'entry').map(item => {
-    const count = Number(item.count ?? 0);
-    const names: Record<string,string> = { rebuy:'rebuy', addOn:'add-on', reserveStack:'reserve stack', lifeline:'lifeline', startingBounty:'starting bounty' };
-    const label = names[String(item.type)] || String(item.type);
-    return count > 1 ? `${count} ${label}s` : label;
-  });
-  if (!parts.length && Number(player?.rebuys ?? 0) > 0) parts.push(`${player?.rebuys} rebuy${player?.rebuys === 1 ? '' : 's'}`);
+  const parts: string[] = [];
+  const lifelines = items.filter(item => item.type === 'lifeline').reduce((sum,item) => sum + Number(item.count ?? 0), 0);
+  const reserveUsed = items.some(item => item.type === 'reserveStack');
+  const rebuys = items.filter(item => item.type === 'rebuy').reduce((sum,item) => sum + Number(item.count ?? 0), 0) || Number(player?.rebuys ?? 0);
+  const addOns = items.filter(item => item.type === 'addOn').reduce((sum,item) => sum + Number(item.count ?? 0), 0);
+  if (lifelines || reserveUsed) parts.push(`${lifelines} lifeline${lifelines === 1 ? '' : 's'}${reserveUsed ? ' · reserve used' : ''}`);
+  if (rebuys) parts.push(`${rebuys} rebuy${rebuys === 1 ? '' : 's'}`);
+  if (addOns) parts.push(`${addOns} add-on${addOns === 1 ? '' : 's'}`);
   return parts.join(' · ');
 }
 function date(value?: string) {
