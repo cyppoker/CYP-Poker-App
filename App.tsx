@@ -20,11 +20,13 @@ type League = { name?: string; seasonName?: string; gamesPlayed?: number; totalG
 type UpcomingGame = { date?: string; time?: string; details?: string; status?: string };
 type LeagueGameResult = { player?: string; name?: string; finish?: number; points?: number; bounties?: number; eliminatedBy?: string };
 type LeagueGame = { id?: string|number; season?: string; division?: string; divisionName?: string; gameNumber?: number; date?: string; entrants?: number; winner?: string; results?: LeagueGameResult[] };
-type TournamentHistoryRow = { id?: number|string; code?: string; date?: string; tournamentName?: string; name?: string; type?: string; format?: string; finish?: number; spent?: number; winnings?: number; bountyWinnings?: number };
+type TournamentHistoryRow = { id?: number|string; code?: string; date?: string; tournament?: string; tournamentName?: string; name?: string; type?: string; format?: string; finish?: number; spent?: number; winnings?: number; bountyWinnings?: number; bountyWon?: number };
 type LeagueSeason = { division?: string; divisionName?: string; season?: string; seasonName?: string; status?: string; games?: number; wins?: number; bounties?: number; points?: number; averagePoints?: number; averagePosition?: number; finalPosition?: number };
-type PlayerProfile = { name: string; tournament?: { games?: number; wins?: number; cashes?: number; eliminations?: number; winnings?: number; totalSpent?: number; averageFinish?: number; history?: TournamentHistoryRow[] }; league?: { totals?: { games?: number; wins?: number; bounties?: number; points?: number; averagePoints?: number; averagePosition?: number }; current?: { division?: string; season?: string; startDate?: string; endDate?: string }; seasons?: LeagueSeason[]; gameHistory?: LeagueGame[] } };
-type LiveSeat = { table?: number|string; seat?: number|string; name?: string; player?: string };
-type LiveGame = { code?: string; name?: string; typeLabel?: string; format?: string; theme?: string; date?: string; levelIndex?: number; currentLevel?: any; nextLevel?: any; clock?: { secondsRemaining?: number; running?: boolean; paused?: boolean; isBreak?: boolean }; stats?: { entries?: number; playersRemaining?: number; players?: any[]; startingStack?: number; chipsInPlay?: number; averageStack?: number; prizePool?: number; charityRaised?: number; paidPlaces?: number; payoutType?: string; payoutAmounts?: number[] }; seating?: LiveSeat[]; tableBalanceAlert?: any; mysteryBounty?: any } ;
+type PlayerLeagueHistoryRow = { id?: number|string; date?: string; gameNumber?: number; divisionKey?: string; divisionName?: string; seasonName?: string; tournamentCode?: string; finish?: number; points?: number; bounties?: number; eliminatedBy?: string };
+type PlayerProfile = { name: string; tournament?: { games?: number; wins?: number; cashes?: number; eliminations?: number; winnings?: number; totalSpent?: number; averageFinish?: number; history?: TournamentHistoryRow[] }; league?: { totals?: { games?: number; wins?: number; bounties?: number; points?: number; averagePoints?: number; averagePosition?: number }; current?: any; seasons?: LeagueSeason[]; gameHistory?: PlayerLeagueHistoryRow[] } };
+type LiveSeat = { seat?: number|string; player?: string; locked?: boolean };
+type LiveTable = { table?: number|string; seats?: LiveSeat[] };
+type LiveGame = { code?: string; name?: string; typeLabel?: string; format?: string; theme?: string; date?: string; levelIndex?: number; currentLevel?: any; nextLevel?: any; clock?: { secondsRemaining?: number; running?: boolean; paused?: boolean; isBreak?: boolean }; entries?: number; playersRemaining?: number; players?: any[]; startingStack?: number; chipsInPlay?: number; averageStack?: number; prizePool?: number; charityRaised?: number; paidPlaces?: number; payoutType?: string; payoutAmounts?: number[]; seating?: { finalTable?: boolean; tables?: LiveTable[] }; tableBalanceAlert?: any; mysteryBounty?: any } ;
 type Data = {
   homepage: { nextTournament?: UpcomingGame; nextLeagues?: Record<string, UpcomingGame>; latestWinners?: any[]; latestLeagueWinners?: any[]; leagueLeaders?: any[]; liveGames?: LiveGame[] };
   tournaments: Tournament[];
@@ -101,7 +103,7 @@ function Home({ data, go }: { data: Data; go: (tab: Tab) => void }) {
       <Text style={s.eyebrow}>BRIDLINGTON CYP</Text><Text style={s.heroTitle}>CYP POKER</Text>
       <Text style={s.subtitle}>Tournaments · Leagues · Player Stats</Text>
     </View>
-    {data.liveGames.length > 0 && <><Heading title="Live now" /><Card gold>{data.liveGames.map((g,i)=><View key={g.code||String(i)} style={i>0?s.divider:undefined}><Text style={s.pill}>LIVE</Text><Text style={s.rowTitle}>{g.typeLabel||g.name||'Tournament'}</Text><Text style={s.muted}>{g.stats?.playersRemaining ?? 0} remaining · Avg stack {Number(g.stats?.averageStack??0).toLocaleString('en-GB')}</Text><Text style={s.gold}>{g.clock?.isBreak?'Break':`Level ${Number(g.levelIndex??0)+1}`}</Text></View>)}</Card></>}
+    {data.liveGames.length > 0 && <><Heading title="Live now" /><Card gold>{data.liveGames.map((g,i)=><View key={g.code||String(i)} style={i>0?s.divider:undefined}><Text style={s.pill}>LIVE</Text><Text style={s.rowTitle}>{g.typeLabel||g.name||'Tournament'}</Text><Text style={s.muted}>{g.playersRemaining ?? 0} remaining · Avg stack {Number(g.averageStack??0).toLocaleString('en-GB')}</Text><Text style={s.gold}>{g.clock?.isBreak?'Break':`Level ${Number(g.levelIndex??0)+1}`}</Text></View>)}</Card></>}
     <Heading title="Next tournament" action="VIEW ALL" />
     {next?.status !== 'tbc' && (next?.date || next?.details) ? <Pressable onPress={() => go('Games')}><Card gold>
       <Text style={s.pill}>UPCOMING</Text>
@@ -155,19 +157,22 @@ function Games({ data }: { data: Data }) {
       </Card>
       <Heading title="Tournament status" />
       <View style={s.statRow}>
-        <View style={s.miniStat}><Text style={s.statValue}>{g.stats?.entries ?? 0}</Text><Text style={s.faint}>Entries</Text></View>
-        <View style={s.miniStat}><Text style={s.statValue}>{g.stats?.playersRemaining ?? 0}</Text><Text style={s.faint}>Remaining</Text></View>
-        <View style={s.miniStat}><Text style={s.statValue}>{number(g.stats?.averageStack)}</Text><Text style={s.faint}>Average stack</Text></View>
+        <View style={s.miniStat}><Text style={s.statValue}>{g.entries ?? 0}</Text><Text style={s.faint}>Entries</Text></View>
+        <View style={s.miniStat}><Text style={s.statValue}>{g.playersRemaining ?? 0}</Text><Text style={s.faint}>Remaining</Text></View>
+        <View style={s.miniStat}><Text style={s.statValue}>{number(g.averageStack)}</Text><Text style={s.faint}>Average stack</Text></View>
       </View>
       <View style={s.statRow}>
-        <View style={s.miniStat}><Text style={s.statValue}>{number(g.stats?.chipsInPlay)}</Text><Text style={s.faint}>Chips in play</Text></View>
-        <View style={s.miniStat}><Text style={s.statValue}>{money(g.stats?.prizePool)}</Text><Text style={s.faint}>Prize pool</Text></View>
-        <View style={s.miniStat}><Text style={s.statValue}>{g.stats?.paidPlaces ?? 0}</Text><Text style={s.faint}>Paid places</Text></View>
+        <View style={s.miniStat}><Text style={s.statValue}>{number(g.chipsInPlay)}</Text><Text style={s.faint}>Chips in play</Text></View>
+        <View style={s.miniStat}><Text style={s.statValue}>{money(g.prizePool)}</Text><Text style={s.faint}>Prize pool</Text></View>
+        <View style={s.miniStat}><Text style={s.statValue}>{g.paidPlaces ?? 0}</Text><Text style={s.faint}>Paid places</Text></View>
       </View>
       {g.nextLevel && <Card><Text style={s.rowTitleSmall}>Next level</Text><Text style={s.gold}>{blindLine(g.nextLevel)}</Text></Card>}
-      {(g.seating ?? []).length > 0 && <><Heading title="Seat draw" /><Card>{(g.seating ?? []).map((seat, i) => <View key={i} style={[s.tableRow, i > 0 && s.divider]}>
-        <Text style={s.pos}>T{seat.table ?? '—'}</Text><Text style={s.num}>S{seat.seat ?? '—'}</Text><Text style={[s.flex, s.white]}>{seat.name || seat.player || 'Player'}</Text>
-      </View>)}</Card></>}
+      {(g.seating?.tables ?? []).length > 0 && <><Heading title={g.seating?.finalTable ? "Final table" : "Seat draw"} />{(g.seating?.tables ?? []).map((table, ti) => <Card key={String(table.table ?? ti)}>
+        <Text style={s.rowTitleSmall}>Table {table.table ?? ti + 1}</Text>
+        {(table.seats ?? []).map((seat, i) => <View key={i} style={[s.tableRow, i > 0 && s.divider]}>
+          <Text style={s.num}>S{seat.seat ?? '—'}</Text><Text style={[s.flex, s.white]}>{seat.player || 'Player'}</Text>{seat.locked ? <Text style={s.faint}>Locked</Text> : null}
+        </View>)}
+      </Card>)}</>}
       {g.tableBalanceAlert ? <Card><Text style={s.gold}>Tables unbalanced</Text><Text style={s.muted}>See the Tournament Manager/View Only screen for the current move information.</Text></Card> : null}
     </>;
   }
@@ -265,18 +270,17 @@ function Players({ data }: { data: Data }) {
       <View style={s.statRow}>{[['Games',t.games],['Wins',t.wins],['Cashes',t.cashes],['Eliminations',t.eliminations]].map(([label,v])=><View key={String(label)} style={s.miniStat}><Text style={s.statValue}>{v ?? 0}</Text><Text style={s.faint}>{label}</Text></View>)}</View>
       <View style={s.statRow}><View style={s.miniStat}><Text style={s.statValue}>{money(t.winnings)}</Text><Text style={s.faint}>Winnings</Text></View><View style={s.miniStat}><Text style={s.statValue}>{money(t.totalSpent)}</Text><Text style={s.faint}>Total spent</Text></View><View style={s.miniStat}><Text style={s.statValue}>{t.averageFinish ?? '—'}</Text><Text style={s.faint}>Average finish</Text></View></View>
       <Heading title="Tournament History" />
-      {(t.history??[]).length ? (t.history??[]).map((h,i)=><Card key={String(h.id??h.code??i)}><View style={s.row}><View style={s.flex}><Text style={s.rowTitleSmall}>{h.tournamentName||h.name||h.type||'Tournament'}</Text><Text style={s.faint}>{date(h.date)} · Finish {h.finish ?? '—'} · Spent {money(h.spent)}</Text></View><Text style={s.amountSmall}>{Number(h.winnings??0)>0?money(h.winnings):''}</Text></View></Card>) : <Card><Text style={s.muted}>No tournament history available.</Text></Card>}
+      {(t.history??[]).length ? (t.history??[]).map((h,i)=><Card key={String(h.id??h.code??i)}><View style={s.row}><View style={s.flex}><Text style={s.rowTitleSmall}>{h.tournament||h.tournamentName||h.name||h.type||'Tournament'}</Text><Text style={s.faint}>{date(h.date)} · Finish {h.finish ?? '—'} · Spent {money(h.spent)}</Text></View><Text style={s.amountSmall}>{Number(h.winnings??0)>0?money(h.winnings):''}</Text></View></Card>) : <Card><Text style={s.muted}>No tournament history available.</Text></Card>}
       <Heading title="League Record" />
       <View style={s.statRow}>{[['Games',totals.games],['Wins',totals.wins],['Bounties',totals.bounties],['Points',totals.points]].map(([label,v])=><View key={String(label)} style={s.miniStat}><Text style={s.statValue}>{v ?? 0}</Text><Text style={s.faint}>{label}</Text></View>)}</View>
       <View style={s.statRow}><View style={s.miniStat}><Text style={s.statValue}>{average(totals.averagePoints)}</Text><Text style={s.faint}>Average points</Text></View><View style={s.miniStat}><Text style={s.statValue}>{average(totals.averagePosition)}</Text><Text style={s.faint}>Average position</Text></View></View>
-      {(l.current?.division||l.current?.season) ? <Card gold><Text style={s.rowTitle}>{l.current?.division || 'Current league'}</Text><Text style={s.muted}>{l.current?.season}</Text></Card> : null}
+      {(Array.isArray(l.current) ? l.current : l.current ? [l.current] : []).map((cur:any, i:number) => <Card gold key={i}><Text style={s.rowTitle}>{cur.divisionName || cur.division || 'Current league'}</Text><Text style={s.muted}>{cur.seasonName || cur.season || ''}</Text></Card>)}
       <Heading title="Division History" />
       {(l.seasons??[]).length ? (l.seasons??[]).map((x,i)=><Card key={i}><Text style={s.rowTitleSmall}>{x.divisionName||x.division||'League'} · {x.seasonName||x.season||''}</Text><Text style={s.muted}>{x.games??0} games · {x.wins??0} wins · {x.bounties??0} bounties · {x.points??0} pts</Text><Text style={s.faint}>Avg points {average(x.averagePoints)} · Avg position {average(x.averagePosition)}{x.finalPosition? ` · Final ${x.finalPosition}`:''}</Text></Card>) : <Card><Text style={s.muted}>No division history available.</Text></Card>}
       <Heading title="League Game History" />
-      {(l.gameHistory??[]).length ? (l.gameHistory??[]).map((g,i)=>{
-        const me=(g.results??[]).find(r=>(r.player||r.name)?.toLowerCase()===selected.name.toLowerCase());
-        return <Card key={String(g.id??i)}><View style={s.row}><View style={s.flex}><Text style={s.rowTitleSmall}>{g.divisionName||g.division||'League'}{g.gameNumber?` · Game ${g.gameNumber}`:''}</Text><Text style={s.faint}>{date(g.date)} · Finish {me?.finish ?? '—'}</Text></View><Text style={s.amountSmall}>{me?.points ?? 0} pts</Text></View><Text style={s.muted}>{me?.bounties ?? 0} bounties</Text></Card>;
-      }) : <Card><Text style={s.muted}>No league game history available.</Text></Card>}
+      {(l.gameHistory??[]).length ? (l.gameHistory??[]).map((g,i)=>
+        <Card key={String(g.id??i)}><View style={s.row}><View style={s.flex}><Text style={s.rowTitleSmall}>{g.divisionName||g.divisionKey||'League'}{g.gameNumber?` · Game ${g.gameNumber}`:''}</Text><Text style={s.faint}>{date(g.date)} · Finish {g.finish ?? '—'}</Text></View><Text style={s.amountSmall}>{g.points ?? 0} pts</Text></View><Text style={s.muted}>{g.bounties ?? 0} bounties{g.eliminatedBy ? ` · Eliminated by ${g.eliminatedBy}` : ''}</Text></Card>
+      ) : <Card><Text style={s.muted}>No league game history available.</Text></Card>}
     </>;
   }
   return <><Title title="Players" subtitle={`${profiles.length} CYP player profiles`} />
