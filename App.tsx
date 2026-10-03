@@ -97,13 +97,50 @@ function Home({ data, go }: { data: Data; go: (tab: Tab) => void }) {
   const latest = data.tournaments[0];
   const leagues = Object.entries(data.leagues).filter(([, l]) => l.players?.length);
   const winner = latest?.players?.find(p => p.finish === 1);
+
+  if (selectedLive) {
+    const g = selectedLive;
+    return <><Pressable onPress={() => setSelectedLive(null)}><Text style={s.back}>‹ Back to home</Text></Pressable>
+      <Title title={g.typeLabel || g.name || 'Live Tournament'} subtitle={g.code ? `Live · ${g.code}` : 'Live tournament'} />
+      <Card gold>
+        <Text style={s.pill}>LIVE</Text>
+        <Text style={s.feature}>{g.clock?.isBreak ? 'Break' : blindLine(g.currentLevel) || `Level ${Number(g.levelIndex ?? 0) + 1}`}</Text>
+        <Text style={s.gold}>{clock(g.clock?.secondsRemaining)} remaining</Text>
+        <Text style={s.muted}>{g.clock?.running ? 'Clock running' : g.clock?.paused ? 'Clock paused' : ''}</Text>
+      </Card>
+      <Heading title="Tournament status" />
+      <View style={s.statRow}>
+        <View style={s.miniStat}><Text style={s.statValue}>{g.entries ?? 0}</Text><Text style={s.faint}>Entries</Text></View>
+        <View style={s.miniStat}><Text style={s.statValue}>{g.playersRemaining ?? 0}</Text><Text style={s.faint}>Remaining</Text></View>
+        <View style={s.miniStat}><Text style={s.statValue}>{number(g.averageStack)}</Text><Text style={s.faint}>Average stack</Text></View>
+      </View>
+      <View style={s.statRow}>
+        <View style={s.miniStat}><Text style={s.statValue}>{number(g.chipsInPlay)}</Text><Text style={s.faint}>Chips in play</Text></View>
+        <View style={s.miniStat}><Text style={s.statValue}>{money(g.prizePool)}</Text><Text style={s.faint}>Prize pool</Text></View>
+        <View style={s.miniStat}><Text style={s.statValue}>{g.paidPlaces ?? 0}</Text><Text style={s.faint}>Paid places</Text></View>
+      </View>
+      {g.nextLevel && <Card><Text style={s.rowTitleSmall}>Next level</Text><Text style={s.gold}>{blindLine(g.nextLevel)}</Text></Card>}
+      {(g.seating?.tables ?? []).length > 0 && <><Heading title={g.seating?.finalTable ? "Final table" : "Seat draw"} />{(g.seating?.tables ?? []).map((table, ti) => <Card key={String(table.table ?? ti)}>
+        <Text style={s.rowTitleSmall}>Table {table.table ?? ti + 1}</Text>
+        {(table.seats ?? []).map((seat, i) => <View key={i} style={[s.tableRow, i > 0 && s.divider]}>
+          <Text style={s.num}>S{seat.seat ?? '—'}</Text><Text style={[s.flex, s.white]}>{seat.player || 'Player'}</Text>{seat.locked ? <Text style={s.faint}>Locked</Text> : null}
+        </View>)}
+      </Card>)}</>}
+    </>;
+  }
+
   return <>
     <View style={s.hero}>
       <Image source={require('./assets/cyp-logo.jpeg')} style={s.brandImage} resizeMode="contain" />
       <Text style={s.eyebrow}>BRIDLINGTON CYP</Text><Text style={s.heroTitle}>CYP POKER</Text>
       <Text style={s.subtitle}>Tournaments · Leagues · Player Stats</Text>
     </View>
-    {data.liveGames.length > 0 && <><Heading title="Live now" /><Card gold>{data.liveGames.map((g,i)=><View key={g.code||String(i)} style={i>0?s.divider:undefined}><Text style={s.pill}>LIVE</Text><Text style={s.rowTitle}>{g.typeLabel||g.name||'Tournament'}</Text><Text style={s.muted}>{g.playersRemaining ?? 0} remaining · Avg stack {Number(g.averageStack??0).toLocaleString('en-GB')}</Text><Text style={s.gold}>{g.clock?.isBreak?'Break':`Level ${Number(g.levelIndex??0)+1}`}</Text></View>)}</Card></>}
+    {data.liveGames.length > 0 && <><Heading title="Live now" />{data.liveGames.map((g,i)=><Pressable key={g.code||String(i)} onPress={() => setSelectedLive(g)}><Card gold>
+      <View style={s.row}><View style={s.flex}><Text style={s.pill}>LIVE</Text><Text style={s.rowTitle}>{g.typeLabel||g.name||'Tournament'}</Text>
+        <Text style={s.muted}>{g.playersRemaining ?? 0} remaining · Avg stack {number(g.averageStack)}</Text>
+        <Text style={s.gold}>{g.clock?.isBreak?'Break':blindLine(g.currentLevel) || `Level ${Number(g.levelIndex??0)+1}`}</Text>
+      </View><Text style={s.chevron}>›</Text></View>
+    </Card></Pressable>)}</>}
     <Heading title="Next tournament" action="VIEW ALL" />
     {next?.status !== 'tbc' && (next?.date || next?.details) ? <Pressable onPress={() => go('Games')}><Card gold>
       <Text style={s.pill}>UPCOMING</Text>
@@ -145,38 +182,6 @@ function Games({ data }: { data: Data }) {
   const next = data.homepage.nextTournament;
   const nextLeagues = Object.entries(data.homepage.nextLeagues ?? {}).filter(([, game]) => game?.status !== 'tbc' && (game?.date || game?.details));
 
-  if (selectedLive) {
-    const g = selectedLive;
-    return <><Pressable onPress={() => setSelectedLive(null)}><Text style={s.back}>‹ Back to tournaments</Text></Pressable>
-      <Title title={g.typeLabel || g.name || 'Live Tournament'} subtitle={g.code ? `Live · ${g.code}` : 'Live tournament'} />
-      <Card gold>
-        <Text style={s.pill}>LIVE</Text>
-        <Text style={s.feature}>{g.clock?.isBreak ? 'Break' : blindLine(g.currentLevel) || `Level ${Number(g.levelIndex ?? 0) + 1}`}</Text>
-        <Text style={s.gold}>{clock(g.clock?.secondsRemaining)} remaining</Text>
-        <Text style={s.muted}>{g.clock?.running ? 'Clock running' : g.clock?.paused ? 'Clock paused' : ''}</Text>
-      </Card>
-      <Heading title="Tournament status" />
-      <View style={s.statRow}>
-        <View style={s.miniStat}><Text style={s.statValue}>{g.entries ?? 0}</Text><Text style={s.faint}>Entries</Text></View>
-        <View style={s.miniStat}><Text style={s.statValue}>{g.playersRemaining ?? 0}</Text><Text style={s.faint}>Remaining</Text></View>
-        <View style={s.miniStat}><Text style={s.statValue}>{number(g.averageStack)}</Text><Text style={s.faint}>Average stack</Text></View>
-      </View>
-      <View style={s.statRow}>
-        <View style={s.miniStat}><Text style={s.statValue}>{number(g.chipsInPlay)}</Text><Text style={s.faint}>Chips in play</Text></View>
-        <View style={s.miniStat}><Text style={s.statValue}>{money(g.prizePool)}</Text><Text style={s.faint}>Prize pool</Text></View>
-        <View style={s.miniStat}><Text style={s.statValue}>{g.paidPlaces ?? 0}</Text><Text style={s.faint}>Paid places</Text></View>
-      </View>
-      {g.nextLevel && <Card><Text style={s.rowTitleSmall}>Next level</Text><Text style={s.gold}>{blindLine(g.nextLevel)}</Text></Card>}
-      {(g.seating?.tables ?? []).length > 0 && <><Heading title={g.seating?.finalTable ? "Final table" : "Seat draw"} />{(g.seating?.tables ?? []).map((table, ti) => <Card key={String(table.table ?? ti)}>
-        <Text style={s.rowTitleSmall}>Table {table.table ?? ti + 1}</Text>
-        {(table.seats ?? []).map((seat, i) => <View key={i} style={[s.tableRow, i > 0 && s.divider]}>
-          <Text style={s.num}>S{seat.seat ?? '—'}</Text><Text style={[s.flex, s.white]}>{seat.player || 'Player'}</Text>{seat.locked ? <Text style={s.faint}>Locked</Text> : null}
-        </View>)}
-      </Card>)}</>}
-      {g.tableBalanceAlert ? <Card><Text style={s.gold}>Tables unbalanced</Text><Text style={s.muted}>See the Tournament Manager/View Only screen for the current move information.</Text></Card> : null}
-    </>;
-  }
-
   if (selected) {
     const finishers = [...(selected.finishingOrder ?? selected.players ?? [])].sort((a, b) => Number(a.finish ?? 999) - Number(b.finish ?? 999));
     return <><Pressable onPress={() => setSelected(null)}><Text style={s.back}>‹ Back to tournaments</Text></Pressable>
@@ -200,14 +205,7 @@ function Games({ data }: { data: Data }) {
     </>;
   }
 
-  return <><Title title="Tournaments" subtitle="Upcoming, live and completed games" />
-    {data.liveGames.length > 0 && <><Heading title="Live now" />
-      {data.liveGames.map((g, i) => <Pressable key={g.code || String(i)} onPress={() => setSelectedLive(g)}><Card gold>
-        <View style={s.row}><View style={s.flex}><Text style={s.pill}>LIVE</Text><Text style={s.rowTitle}>{g.typeLabel || g.name || 'Tournament'}</Text>
-          <Text style={s.muted}>{g.clock?.isBreak ? 'Break' : blindLine(g.currentLevel)} · {clock(g.clock?.secondsRemaining)} remaining</Text>
-        </View><Text style={s.chevron}>›</Text></View>
-      </Card></Pressable>)}
-    </>}
+  return <><Title title="Tournaments" subtitle="Upcoming and completed games" />
     <Heading title="Upcoming" />{next?.status !== 'tbc' && (next?.date || next?.details) ? <Card gold><Text style={s.feature}>{cleanText(next?.details) || 'Tournament'}</Text>
       <Text style={s.gold}>{date(next?.date)}{next?.time ? `  ·  ${next.time}` : ''}</Text></Card> : <Card><Text style={s.muted}>No tournament is currently scheduled.</Text></Card>}
     {nextLeagues.length > 0 && <>
